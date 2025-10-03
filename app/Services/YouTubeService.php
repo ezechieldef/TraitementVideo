@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class YouTubeService
 {
@@ -55,18 +56,18 @@ class YouTubeService
             'id' => $id,
             'key' => $apiKey,
         ]);
-        if (! $resp->successful()) {
+        if (!$resp->successful()) {
             $error = $resp->json('error') ?? [];
-            $msg = $error['message'] ?? ('HTTP '.$resp->status());
+            $msg = $error['message'] ?? ('HTTP ' . $resp->status());
             $reason = $error['errors'][0]['reason'] ?? null;
             if ($reason) {
-                $msg .= ' (reason: '.$reason.')';
+                $msg .= ' (reason: ' . $reason . ')';
             }
 
-            return ['success' => false, 'message' => 'YouTube: '.$msg];
+            return ['success' => false, 'message' => 'YouTube: ' . $msg];
         }
         $item = $resp->json('items.0');
-        if (! $item) {
+        if (!$item) {
             return ['success' => false, 'message' => 'Vidéo introuvable.'];
         }
 
@@ -80,7 +81,7 @@ class YouTubeService
 
         $data = [
             'id' => $id,
-            'url' => 'https://www.youtube.com/watch?v='.$id,
+            'url' => 'https://www.youtube.com/watch?v=' . $id,
             'title' => $snippet['title'] ?? '',
             'published_at' => isset($snippet['publishedAt']) ? new \DateTimeImmutable($snippet['publishedAt']) : null,
             'thumbnails' => $snippet['thumbnails'] ?? [],
@@ -90,6 +91,98 @@ class YouTubeService
         ];
 
         return ['success' => true, 'data' => $data];
+    }
+
+    /**
+     * Resolve a YouTube channel id (UC...) from various inputs: handle (@name), /user/name, /c/custom, or full URL.
+     *
+     * @return array{success:bool,channelId?:string,message?:string}
+     */
+    public function resolveChannelId(string $input, ?string $apiKey): array
+    {
+        $input = trim($input);
+        $apiKey = $apiKey !== null ? trim($apiKey) : null;
+        if ($input === '') {
+            return ['success' => false, 'message' => 'Entrée vide pour la résolution du channel id.'];
+        }
+        if ($apiKey === null || $apiKey === '') {
+            return ['success' => false, 'message' => 'Aucune clé API YouTube disponible pour la résolution.'];
+        }
+
+        // 1) Already a UC... id
+        if (preg_match('/^UC[0-9A-Za-z_-]+$/', $input)) {
+            return ['success' => true, 'channelId' => $input];
+        }
+
+        // 2) Extract from /channel/UC...
+        if (preg_match('#/channel/(UC[0-9A-Za-z_-]+)#i', $input, $m)) {
+            return ['success' => true, 'channelId' => $m[1]];
+        }
+
+        // Normalize if full URL
+        $path = $input;
+        if (preg_match('#^https?://[^/]+/(.+)$#i', $input, $m)) {
+            $path = '/' . ltrim($m[1], '/');
+        }
+
+        // 3) Handle @handle (from string or URL)
+        if (preg_match('#@([A-Za-z0-9_.-]+)#', $input, $m)) {
+            $handle = $m[1];
+            $resp = Http::timeout(15)->get('https://www.googleapis.com/youtube/v3/channels', [
+                'part' => 'id',
+                'forHandle' => $handle,
+                'key' => $apiKey,
+            ]);
+            if ($resp->successful() && ($id = $resp->json('items.0.id'))) {
+                return ['success' => true, 'channelId' => $id];
+            }
+        }
+
+        // 4) /user/username
+        if (preg_match('#/user/([^/?]+)#i', $path, $m)) {
+            $username = $m[1];
+            $resp = Http::timeout(15)->get('https://www.googleapis.com/youtube/v3/channels', [
+                'part' => 'id',
+                'forUsername' => $username,
+                'key' => $apiKey,
+            ]);
+            if ($resp->successful() && ($id = $resp->json('items.0.id'))) {
+                return ['success' => true, 'channelId' => $id];
+            }
+        }
+
+        // 5) /c/customName or other: fallback search by name
+        if (preg_match('#/c/([^/?]+)#i', $path, $m)) {
+            $custom = $m[1];
+            $resp = Http::timeout(15)->get('https://www.googleapis.com/youtube/v3/search', [
+                'part' => 'id',
+                'type' => 'channel',
+                'q' => $custom,
+                'maxResults' => 1,
+                'key' => $apiKey,
+            ]);
+            $cid = $resp->json('items.0.id.channelId') ?? null;
+            if ($resp->successful() && $cid) {
+                return ['success' => true, 'channelId' => $cid];
+            }
+        }
+
+        // 6) Last resort: search using the whole input (likely a name)
+        $resp = Http::timeout(15)->get('https://www.googleapis.com/youtube/v3/search', [
+            'part' => 'id',
+            'type' => 'channel',
+            'q' => $input,
+            'maxResults' => 1,
+            'key' => $apiKey,
+        ]);
+        $cid = $resp->json('items.0.id.channelId') ?? null;
+        if ($resp->successful() && $cid) {
+            return ['success' => true, 'channelId' => $cid];
+        }
+
+        $error = $resp->json('error.message') ?? 'Impossible de résoudre le Channel ID.';
+
+        return ['success' => false, 'message' => $error];
     }
 
     /**
@@ -120,7 +213,7 @@ class YouTubeService
         $items = [];
 
         // First uploaded videos
-        if (! empty($typeFilters)) {
+        if (!empty($typeFilters)) {
             $params = [
                 'part' => 'snippet',
                 'channelId' => $channelId,
@@ -135,15 +228,16 @@ class YouTubeService
             if ($publishedBefore !== null) {
                 $params['publishedBefore'] = $publishedBefore;
             }
+            Log::info('YouTube API search params', $params);
             $resp = Http::timeout(20)->get('https://www.googleapis.com/youtube/v3/search', $params);
-            if (! $resp->successful()) {
-                $msg = $resp->json('error.message') ?? ('HTTP '.$resp->status());
+            if (!$resp->successful()) {
+                $msg = $resp->json('error.message') ?? ('HTTP ' . $resp->status());
 
-                return ['success' => false, 'message' => 'YouTube: '.$msg];
+                return ['success' => false, 'message' => 'YouTube: ' . $msg];
             }
             foreach ((array) ($resp->json('items') ?? []) as $it) {
                 $vid = $it['id']['videoId'] ?? null;
-                if (! $vid) {
+                if (!$vid) {
                     continue;
                 }
                 $items[] = [
@@ -177,7 +271,7 @@ class YouTubeService
             if ($resp->successful()) {
                 foreach ((array) ($resp->json('items') ?? []) as $it) {
                     $vid = $it['id']['videoId'] ?? null;
-                    if (! $vid) {
+                    if (!$vid) {
                         continue;
                     }
                     $items[] = [
@@ -193,7 +287,7 @@ class YouTubeService
 
         // Optionally enrich durations via videos.list in batches of 50
         $ids = array_values(array_unique(array_column($items, 'id')));
-        if (! empty($ids)) {
+        if (!empty($ids)) {
             $chunks = array_chunk($ids, 50);
             $durations = [];
             foreach ($chunks as $chunk) {

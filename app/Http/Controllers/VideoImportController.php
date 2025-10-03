@@ -16,7 +16,9 @@ use Illuminate\Support\Facades\Auth;
 
 class VideoImportController extends Controller
 {
-    public function __construct(private YouTubeService $youTube) {}
+    public function __construct(private YouTubeService $youTube)
+    {
+    }
 
     public function index(): View
     {
@@ -53,7 +55,7 @@ class VideoImportController extends Controller
 
         $info = $this->youTube->fetchVideoInfoFromUrl($url, $apiKey);
 
-        if (! $info['success']) {
+        if (!$info['success']) {
             return back()->withErrors(['url' => $info['message']])->withInput();
         }
 
@@ -68,14 +70,14 @@ class VideoImportController extends Controller
         $user = Auth::user();
         $allowedEntiteIds = $user instanceof User ? $user->entites()->pluck('entites.id')->all() : [];
         $entiteId = (int) $data['entite_id'];
-        if (! in_array($entiteId, $allowedEntiteIds, true)) {
+        if (!in_array($entiteId, $allowedEntiteIds, true)) {
             return back()->withErrors(['entite_id' => "Vous n'avez pas accès à cette entité."])->withInput();
         }
 
         $apiKey = $this->getYoutubeKeyForUser($user);
 
         $info = $this->youTube->fetchVideoInfoFromUrl($data['url'], $apiKey);
-        if (! $info['success']) {
+        if (!$info['success']) {
             return back()->withErrors(['url' => $info['message']])->withInput();
         }
 
@@ -91,7 +93,7 @@ class VideoImportController extends Controller
             'url' => $payload['url'] ?? $data['url'],
             'status' => 'NEW',
             // Store only the hqdefault thumbnail URL
-            'thumbnails' => 'https://i.ytimg.com/vi/'.$payload['id'].'/hqdefault.jpg',
+            'thumbnails' => 'https://i.ytimg.com/vi/' . $payload['id'] . '/hqdefault.jpg',
             'published_at' => $payload['published_at'] ?? null,
             'duration' => $payload['durationSeconds'] ?? null,
             'langue' => $payload['language'] ?? null,
@@ -112,27 +114,39 @@ class VideoImportController extends Controller
         $user = Auth::user();
         $allowedEntiteIds = $user instanceof User ? $user->entites()->pluck('entites.id')->all() : [];
         $entiteId = (int) ($data['entite_id'] ?? 0);
-        if (! in_array($entiteId, $allowedEntiteIds, true)) {
+        if (!in_array($entiteId, $allowedEntiteIds, true)) {
             return back()->withErrors(['entite_id' => "Vous n'avez pas accès à cette entité."])->withInput();
         }
 
         $chaine = Chaine::query()->find($data['chaine_id']);
-        if (! $chaine instanceof Chaine) {
+        if (!$chaine instanceof Chaine) {
             return back()->withErrors(['chaine_id' => 'Chaîne introuvable.']);
         }
-        if (! in_array($chaine->entite_id, $allowedEntiteIds, true)) {
+        if (!in_array($chaine->entite_id, $allowedEntiteIds, true)) {
             return back()->withErrors(['chaine_id' => "Vous n'avez pas accès à cette chaîne."]);
         }
 
         $apiKey = $this->getYoutubeKeyForUser($user);
-        $publishedAfter = $data['date_debut'] ? (new \DateTimeImmutable($data['date_debut'].' 00:00:00'))->format(DATE_RFC3339) : null;
-        $publishedBefore = $data['date_fin'] ? (new \DateTimeImmutable($data['date_fin'].' 23:59:59'))->format(DATE_RFC3339) : null;
+        // If the chaine has no real channel_id yet, try resolving it now using youtube_url, update and continue
+        if ((!$chaine->channel_id || !str_starts_with((string) $chaine->channel_id, 'UC')) && $chaine->youtube_url && $apiKey) {
+            $res = $this->youTube->resolveChannelId($chaine->youtube_url, $apiKey);
+            if (($res['success'] ?? false) && !empty($res['channelId'])) {
+                $chaine->channel_id = $res['channelId'];
+                $chaine->save();
+            }
+        }
+        // If we still don't have a valid channel id, stop with a user-friendly message
+        if (!$chaine->channel_id || !str_starts_with((string) $chaine->channel_id, 'UC')) {
+            return back()->withErrors(['chaine_id' => "Impossible de résoudre l'identifiant réel de la chaîne. Ajoutez une clé YouTube à l'entité ou renseignez l'ID UC... dans la fiche chaîne."]);
+        }
+        $publishedAfter = $data['date_debut'] ? (new \DateTimeImmutable($data['date_debut'] . ' 00:00:00'))->format(DATE_RFC3339) : null;
+        $publishedBefore = $data['date_fin'] ? (new \DateTimeImmutable($data['date_fin'] . ' 23:59:59'))->format(DATE_RFC3339) : null;
 
         $wantLive = (bool) ($data['live'] ?? false);
         $wantUploaded = (bool) ($data['uploaded'] ?? false);
 
         $results = $this->youTube->searchChannelVideos(
-            channelId: $chaine->channel_id,
+            channelId: (string) $chaine->channel_id,
             apiKey: $apiKey,
             publishedAfter: $publishedAfter,
             publishedBefore: $publishedBefore,
@@ -140,7 +154,7 @@ class VideoImportController extends Controller
             includeUploaded: $wantUploaded,
         );
 
-        if (! $results['success']) {
+        if (!$results['success']) {
             return back()->withErrors(['chaine_id' => $results['message'] ?? 'Erreur lors de la récupération des vidéos.']);
         }
 
@@ -152,10 +166,10 @@ class VideoImportController extends Controller
             ]);
             $v->fill([
                 'titre' => $item['title'] ?? '',
-                'url' => 'https://www.youtube.com/watch?v='.$item['id'],
+                'url' => 'https://www.youtube.com/watch?v=' . $item['id'],
                 'status' => 'NEW',
                 // Store only the hqdefault thumbnail URL (uniform with single video import)
-                'thumbnails' => 'https://i.ytimg.com/vi/'.$item['id'].'/hqdefault.jpg',
+                'thumbnails' => 'https://i.ytimg.com/vi/' . $item['id'] . '/hqdefault.jpg',
                 'published_at' => $item['published_at'] ?? null,
                 'duration' => $item['durationSeconds'] ?? null,
                 'langue' => $item['language'] ?? null,
@@ -165,18 +179,18 @@ class VideoImportController extends Controller
             if ($v->isDirty()) {
                 $v->save();
                 $imported++;
-            } elseif (! $v->exists) {
+            } elseif (!$v->exists) {
                 $v->save();
                 $imported++;
             }
         }
 
-        return redirect()->route('videos.import')->with('success', $imported.' vidéo(s) importée(s) depuis la chaîne.');
+        return redirect()->route('videos.import')->with('success', $imported . ' vidéo(s) importée(s) depuis la chaîne.');
     }
 
     private function getYoutubeKeyForUser(?User $user): ?string
     {
-        if (! $user instanceof User) {
+        if (!$user instanceof User) {
             return null;
         }
         $entiteIds = $user->entites()->pluck('entites.id')->all();

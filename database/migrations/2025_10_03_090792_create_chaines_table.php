@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('entite_id')->constrained('entites')->onDelete('cascade');
             $table->string('titre');
+
             $table->string('channel_id')->nullable();
             $table->text('youtube_url')->nullable();
             $table->timestamps();

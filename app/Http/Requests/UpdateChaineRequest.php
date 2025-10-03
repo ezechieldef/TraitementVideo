@@ -15,7 +15,7 @@ class UpdateChaineRequest extends FormRequest
     {
         return [
             'titre' => ['required', 'string', 'max:255'],
-            'channel_id' => ['required', 'string', 'max:255'],
+            'channel_id' => ['nullable', 'string', 'max:255'],
             'youtube_url' => ['required', 'url:http,https'],
         ];
     }

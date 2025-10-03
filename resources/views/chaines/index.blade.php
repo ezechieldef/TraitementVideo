@@ -34,12 +34,7 @@
                     <div class="text-sm text-red-600">{{ $message }}</div>
                 @enderror
 
-                <label class="block text-sm theme-muted-text">Channel ID </label>
-                <input type="text" name="channel_id" value="{{ old('channel_id') }}"
-                    class="w-full rounded-lg theme-input" placeholder="UC..." required />
-                @error('channel_id')
-                    <div class="text-sm text-red-600">{{ $message }}</div>
-                @enderror
+
 
                 <div class="flex justify-end">
                     <button
@@ -113,28 +108,5 @@
             @endif
         </div>
     </div>
-    <script>
-        (function() {
-            const urlInput = document.querySelector('#chaine-create-form input[name="youtube_url"]');
-            const channelIdInput = document.querySelector('#chaine-create-form input[name="channel_id"]');
-            if (!urlInput || !channelIdInput) return;
 
-            function extractChannelId(url) {
-                if (!url) return '';
-                const m = url.match(/\/channel\/([A-Za-z0-9_-]+)/);
-                return m ? m[1] : '';
-            }
-
-            function maybeFillChannelId() {
-                const cid = extractChannelId(urlInput.value.trim());
-                if (cid && !channelIdInput.value) {
-                    channelIdInput.value = cid;
-                }
-            }
-
-            urlInput.addEventListener('change', maybeFillChannelId);
-            urlInput.addEventListener('paste', () => setTimeout(maybeFillChannelId, 0));
-            urlInput.addEventListener('blur', maybeFillChannelId);
-        })();
-    </script>
 @endsection
