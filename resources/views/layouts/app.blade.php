@@ -16,7 +16,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="theme-bg ">
+<body class="theme-muted">
     <div id="app" class="flex h-screen overflow-hidden">
         <!-- Sidebar Overlay (Mobile) -->
         <div id="sidebar-overlay" class="fixed inset-0 z-40 backdrop-blur-sm transition-opacity lg:hidden"
