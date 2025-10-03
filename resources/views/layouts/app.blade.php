@@ -35,6 +35,7 @@
             <!-- Main Content Area -->
             <main class="flex-1 overflow-y-auto p-6">
                 <!-- Success Message -->
+                <div class="h-16"></div>
                 @if (session('success'))
                     <div class="mb-6 flex items-center gap-3 rounded-lg theme-surface p-4">
                         <i class="ti ti-circle-check text-xl text-green-600"></i>
@@ -49,7 +50,7 @@
                         <span class="text-red-800">{{ session('error') }}</span>
                     </div>
                 @endif
-                <div class="pt-16">
+                <div class="">
 
                     @yield('content')
                 </div>
@@ -103,6 +104,7 @@
         window.__toggleSidebar = toggleSidebar;
         window.__toggleDarkMode = toggleDarkMode;
     </script>
+    @include('layouts.partials.scripts')
 </body>
 
 </html>

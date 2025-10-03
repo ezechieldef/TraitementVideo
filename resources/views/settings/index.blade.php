@@ -3,7 +3,7 @@
 @section('title', 'Paramètres')
 
 @section('content')
-    <div class="mx-auto max-w-6xl space-y-8">
+    <div class="mx-auto max-w-7xl space-y-8">
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold theme-title">Paramètres</h1>
         </div>

@@ -28,10 +28,10 @@
             </h3>
         </div>
 
-        <a href="#"
+        <a href="{{ route('entites.index') }}" data-route="entites"
             class="app-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition theme-body hover-theme-muted">
             <i class="ti ti-users text-xl"></i>
-            <span>Utilisateurs</span>
+            <span>Équipes / Entités</span>
         </a>
 
         <a href="{{ route('settings.index') }}" data-route="settings"
@@ -40,11 +40,29 @@
             <span>Paramètres</span>
         </a>
 
+        <a href="{{ route('keys.index') }}" data-route="keys"
+            class="app-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition theme-body hover-theme-muted">
+            <i class="ti ti-key text-xl"></i>
+            <span>Clés d'API</span>
+        </a>
+
         <div class="pb-2 pt-4">
             <h3 class="px-3 text-xs font-semibold uppercase tracking-wider theme-muted-text">
                 Contenu
             </h3>
         </div>
+
+        <a href="{{ route('videos.index') }}" data-route="videos"
+            class="app-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition theme-body hover-theme-muted">
+            <i class="ti ti-video text-xl"></i>
+            <span>Vidéos</span>
+        </a>
+
+        <a href="{{ route('chaines.index') }}" data-route="chaines"
+            class="app-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition theme-body hover-theme-muted">
+            <i class="ti ti-brand-youtube text-xl"></i>
+            <span>Chaînes</span>
+        </a>
 
         <a href="#"
             class="app-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition theme-body hover-theme-muted">

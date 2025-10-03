@@ -18,7 +18,7 @@
     /* gray-0 */
     --surface-border: #e5e7eb;
     /* gray-200 */
-    --muted-bg: #f9fafb;
+    --muted-bg: #EFF1F3;
     /* gray-50 */
     --title-color: #111827;
     /* gray-900 */
@@ -127,32 +127,88 @@
 }
 
 
-/* Inputs baseline styling (no @apply) */
-input {
-    padding: 0.25rem 0.5rem;
-    /* py-1 px-2 */
+/* Inputs baseline styling shared across input/select/textarea and .input class */
+.input,
+input,
+select,
+textarea {
+    padding: 0.5rem 0.75rem;
+    /* py-2 px-3 */
     border: 1px solid #d1d5db;
     /* gray-300 */
     border-radius: 0.375rem;
     /* rounded-md */
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     /* shadow-sm */
+    background-color: #ffffff;
 }
 
-input:focus {
+.input:focus,
+input:focus,
+select:focus,
+textarea:focus {
     outline: 2px solid rgb(239, 68, 68);
     /* ring-2 ring-red-500 */
     border-color: rgb(239, 68, 68);
     /* border-red-500 */
 }
 
-.dark input {
+/* Dark mode for inputs */
+.dark .input,
+.dark input,
+.dark select,
+.dark textarea {
     color: #ffffff;
     background-color: #1f2937;
     /* gray-800 */
+    border-color: #374151;
+    /* gray-700 */
 }
 
-.dark input::placeholder {
+.dark .input::placeholder,
+.dark input::placeholder,
+.dark textarea::placeholder {
     color: #ffffff;
     opacity: 0.8;
+}
+
+/* Select specific tweaks */
+select,
+select.input {
+    background-image: linear-gradient(45deg, transparent 50%, #6b7280 50%),
+        linear-gradient(135deg, #6b7280 50%, transparent 50%);
+    background-position: calc(100% - 18px) calc(1.2em), calc(100% - 13px) calc(1.2em);
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 2rem;
+    /* space for arrow */
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Modal (dialog) centering and backdrop */
+.app-modal {
+    border: none;
+    padding: 0;
+    @apply backdrop-blur-md;
+}
+
+.app-modal[open] {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    /* centers both H & V */
+}
+
+.app-modal::backdrop {
+    background-color: rgba(0, 0, 0, 0.3);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+}
+
+.swal2-container.swal2-backdrop-show {
+    background-color: rgba(0, 0, 0, 0.4);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
 }
