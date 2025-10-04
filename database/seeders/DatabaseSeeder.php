@@ -14,7 +14,10 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // User::factory(10)->create();
-        $this->call([LLMSeeder::class]);
+        $this->call([
+            LLMSeeder::class,
+            PrompteSeeder::class,
+        ]);
         $admin = User::updateOrCreate([
             'email' => 'admin@admin.com',
         ], [

@@ -64,6 +64,12 @@
             <span>Chaînes</span>
         </a>
 
+        <a href="{{ route('promptes.index') }}" data-route="promptes"
+            class="app-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition theme-body hover-theme-muted">
+            <i class="ti ti-forms text-xl"></i>
+            <span>Promptes</span>
+        </a>
+
         <a href="#"
             class="app-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition theme-body hover-theme-muted">
             <i class="ti ti-file-text text-xl"></i>

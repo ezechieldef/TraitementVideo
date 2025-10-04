@@ -3,6 +3,7 @@
 use App\Http\Controllers\ChaineController;
 use App\Http\Controllers\EntiteController;
 use App\Http\Controllers\KeyTokenController;
+use App\Http\Controllers\PrompteController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\VideoController;
 use App\Http\Controllers\VideoImportController;
@@ -58,6 +59,14 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     Route::get('/chaines/{chaine}/edit', [ChaineController::class, 'edit'])->name('chaines.edit');
     Route::put('/chaines/{chaine}', [ChaineController::class, 'update'])->name('chaines.update');
     Route::delete('/chaines/{chaine}', [ChaineController::class, 'destroy'])->name('chaines.destroy');
+
+    // Prompte (CRUD)
+    Route::get('/promptes', [PrompteController::class, 'index'])->name('promptes.index');
+    Route::get('/promptes/create', [PrompteController::class, 'create'])->name('promptes.create');
+    Route::post('/promptes', [PrompteController::class, 'store'])->name('promptes.store');
+    Route::get('/promptes/{prompte}/edit', [PrompteController::class, 'edit'])->name('promptes.edit');
+    Route::put('/promptes/{prompte}', [PrompteController::class, 'update'])->name('promptes.update');
+    Route::delete('/promptes/{prompte}', [PrompteController::class, 'destroy'])->name('promptes.destroy');
 });
 
 // Signed routes for accept/reject that can be opened from email without auth
