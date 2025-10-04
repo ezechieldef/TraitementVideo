@@ -54,6 +54,8 @@ Route::middleware(['auth', 'auth.session'])->group(function () {
     Route::get('/videos', [VideoController::class, 'index'])->name('videos.index');
     Route::get('/videos/{video}/traiter', [VideoController::class, 'traiter'])->name('videos.traiter');
 
+
+
     // Chaînes (CRUD)
     Route::get('/chaines', [ChaineController::class, 'index'])->name('chaines.index');
     Route::post('/chaines', [ChaineController::class, 'store'])->name('chaines.store');

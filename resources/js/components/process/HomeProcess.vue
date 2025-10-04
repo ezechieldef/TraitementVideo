@@ -2,7 +2,7 @@
     <div class="space-y-6">
         <!-- Stepper header -->
         <div class="">
-            <ol class="flex items-center gap-3 flex-wrap">
+            <ol class="flex items-center gap-3 flex-wrap border border-gray-500/30 py-2 px-3 rounded-lg">
                 <li v-for="(s, idx) in steps" :key="s.key" class="flex items-center gap-2"
                     :class="isDisabled(idx) ? 'cursor-not-allowed' : 'cursor-pointer'" @click="goTo(idx)">
                     <div :class="badgeClasses(idx)">
@@ -67,7 +67,9 @@ const maxAllowedIndex = computed(() => {
 onMounted(() => {
     try {
         const raw = localStorage.getItem('video_data')
+
         video.value = raw ? JSON.parse(raw) : null
+
         // Initialise la position courante sur la progression sauvegardée
         const initial = Number(video.value?.step ?? 0)
         currentIndex.value = Math.max(0, Math.min(initial, maxAllowedIndex.value))

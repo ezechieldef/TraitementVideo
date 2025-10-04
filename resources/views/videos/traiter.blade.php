@@ -2,7 +2,7 @@
 @push('scripts')
     @vite(['resources/css/app.css', 'resources/js/app-traitement.js'])
     <script>
-        localStorage.setItem('video_data', @json($video));
+        localStorage.setItem('video_data', JSON.stringify(@json($video)));
     </script>
 @endpush
 
