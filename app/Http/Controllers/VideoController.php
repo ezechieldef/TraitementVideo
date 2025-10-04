@@ -19,7 +19,7 @@ class VideoController extends Controller
         $entiteIds = $user instanceof User ? $user->entites()->pluck('entites.id')->all() : [];
 
         $status = strtoupper($data['status'] ?? 'NEW');
-        if (! in_array($status, ['NEW', 'PROCESSING', 'DONE'], true)) {
+        if (!in_array($status, ['NEW', 'PROCESSING', 'DONE'], true)) {
             $status = 'NEW';
         }
 
@@ -32,9 +32,9 @@ class VideoController extends Controller
         $q = $data['q'] ?? null;
         if ($q) {
             $query->where(function ($sub) use ($q): void {
-                $sub->where('titre', 'like', '%'.$q.'%')
-                    ->orWhere('url', 'like', '%'.$q.'%')
-                    ->orWhere('youtube_id', 'like', '%'.$q.'%');
+                $sub->where('titre', 'like', '%' . $q . '%')
+                    ->orWhere('url', 'like', '%' . $q . '%')
+                    ->orWhere('youtube_id', 'like', '%' . $q . '%');
             });
         }
 
@@ -57,6 +57,20 @@ class VideoController extends Controller
                 'date_debut' => $dateDebut,
                 'date_fin' => $dateFin,
             ],
+        ]);
+    }
+
+    public function traiter(Video $video): View
+    {
+        /** @var User|null $user */
+        $user = Auth::user();
+        $entiteIds = $user instanceof User ? $user->entites()->pluck('entites.id')->all() : [];
+        if (!in_array($video->entite_id, $entiteIds, true)) {
+            abort(403, 'Action non autorisée.');
+        }
+
+        return view('videos.traiter', [
+            'video' => $video,
         ]);
     }
 }

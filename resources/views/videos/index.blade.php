@@ -96,8 +96,18 @@
                         <h3 class="font-medium theme-title line-clamp-2">{{ $v->titre }}</h3>
                         <div class="mt-3 flex items-center justify-between">
                             <a href="{{ $v->url }}" target="_blank" class="text-slate-600 hover:underline">Ouvrir</a>
-                            <span
-                                class="text-xs rounded px-2 py-1 theme-muted-text theme-muted">{{ strtolower($v->status) }}</span>
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="text-xs rounded px-2 py-1 theme-muted-text theme-muted">{{ strtolower($v->status) }}</span>
+                                @if ($v->status === 'NEW')
+                                    <a href="{{ route('videos.traiter', $v) }}"
+                                        class="rounded-lg px-3 py-1 bg-slate-600 text-white hover:bg-slate-700">Traiter</a>
+                                @elseif ($v->status === 'PROCESSING')
+                                    <a href="{{ route('videos.traiter', $v) }}"
+                                        class="rounded-lg px-3 py-1 bg-slate-600 text-white hover:bg-slate-700">Continuer
+                                        traitement</a>
+                                @endif
+                            </div>
                         </div>
                     </div>
                 </div>

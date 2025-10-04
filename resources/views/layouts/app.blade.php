@@ -13,7 +13,10 @@
     <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet" />
 
     <!-- Scripts -->
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @if (!($disableDefaultAssets ?? false))
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @endif
+    @stack('scripts')
 </head>
 
 <body class="theme-muted">
