@@ -23,12 +23,12 @@ class SectionController extends Controller
     {
         /** @var User|null $user */
         $user = Auth::user();
-        if (! $user) {
+        if (!$user) {
             abort(401);
         }
 
         $entiteIds = $user->entites()->pluck('entites.id')->all();
-        if (! in_array($video->entite_id, $entiteIds, true)) {
+        if (!in_array($video->entite_id, $entiteIds, true)) {
             abort(403, 'Action non autorisée.');
         }
 
@@ -36,7 +36,7 @@ class SectionController extends Controller
             ->where('entite_id', $video->entite_id)
             ->where('user_id', $user->id)
             ->first();
-        if (! $membership) {
+        if (!$membership) {
             abort(403);
         }
     }
@@ -48,12 +48,12 @@ class SectionController extends Controller
     {
         $this->authorizeVideoAccess($video);
 
-    /** @var Collection<int, Section> $sections */
-    $sections = $video->sections()->withCount('resumes')->orderBy('ordre')->orderBy('debut')->get();
+        /** @var Collection<int, Section> $sections */
+        $sections = $video->sections()->withCount('resumes')->orderBy('ordre')->orderBy('debut')->get();
 
         return response()->json([
             'success' => true,
-            'sections' => $sections->map(fn (Section $s) => [
+            'sections' => $sections->map(fn(Section $s) => [
                 'id' => $s->id,
                 'titre' => $s->titre,
                 'debut' => $s->debut,
@@ -177,7 +177,7 @@ class SectionController extends Controller
             ->whereNotNull('value')
             ->orderByDesc('priority')
             ->first();
-        if (! $token || ! $token->llm) {
+        if (!$token || !$token->llm) {
             return response()->json(['success' => false, 'message' => 'Aucun jeton valide pour cet LLM.'], 422);
         }
 
@@ -201,7 +201,7 @@ class SectionController extends Controller
             $tQuery->where('langue', $base);
         }
         $t = $tQuery->latest('id')->first() ?? Transcription::query()->where('video_id', $video->id)->latest('id')->first();
-        if (! $t) {
+        if (!$t) {
             return response()->json(['success' => false, 'message' => 'Aucune transcription disponible pour cette vidéo.'], 422);
         }
         $messages[] = ['role' => 'user', 'content' => "Transcription:\n" . $t->contenu];
@@ -278,7 +278,7 @@ class SectionController extends Controller
             $tQuery->where('langue', $base);
         }
         $t = $tQuery->latest('id')->first() ?? Transcription::query()->where('video_id', $video->id)->latest('id')->first();
-        if (! $t) {
+        if (!$t) {
             return;
         }
 
@@ -300,7 +300,7 @@ class SectionController extends Controller
             if ($line === '') {
                 continue;
             }
-            if (! preg_match('/^\[([0-9]{2}):([0-9]{2}):([0-9]{2})\]\s*(.+)$/', $line, $m)) {
+            if (!preg_match('/^\[([0-9]{2}):([0-9]{2}):([0-9]{2})\]\s*(.+)$/', $line, $m)) {
                 continue;
             }
             $sec = ((int) $m[1]) * 3600 + ((int) $m[2]) * 60 + ((int) $m[3]);

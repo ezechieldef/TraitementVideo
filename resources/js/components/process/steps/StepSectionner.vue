@@ -110,7 +110,7 @@
                                 class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
                                 <option v-for="p in promptesSection" :key="p.id" :value="p.id">{{ p.titre || ('#' +
                                     p.id)
-                                    }}</option>
+                                }}</option>
                             </select>
                         </div>
                         <div>

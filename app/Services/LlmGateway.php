@@ -38,7 +38,7 @@ class LlmGateway
             'model' => $model,
             'messages' => $messages,
             'temperature' => 0,
-            'response_format' => [ 'type' => 'json_object' ],
+            'response_format' => ['type' => 'json_object'],
         ];
 
         $resp = Http::withToken($apiKey)

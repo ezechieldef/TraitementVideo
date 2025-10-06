@@ -99,7 +99,7 @@ class VideoController extends Controller
             ->whereNotNull('value')
             ->get();
         $llmsConfigured = $tokens
-            ->filter(fn ($t) => $t->llm instanceof LLM)
+            ->filter(fn($t) => $t->llm instanceof LLM)
             ->groupBy('llm_id')
             ->map(function ($group) {
                 /** @var \App\Models\KeyToken $first */
