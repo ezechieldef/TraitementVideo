@@ -16,7 +16,6 @@
     @if (!($disableDefaultAssets ?? false))
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     @endif
-    @stack('scripts')
 </head>
 
 <body class="theme-muted">
@@ -108,6 +107,8 @@
         window.__toggleDarkMode = toggleDarkMode;
     </script>
     @include('layouts.partials.scripts')
+    @stack('scripts')
+
 </body>
 
 </html>

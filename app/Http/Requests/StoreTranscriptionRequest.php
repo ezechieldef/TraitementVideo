@@ -18,7 +18,24 @@ class StoreTranscriptionRequest extends FormRequest
     {
         return [
             'langue' => ['required', 'string', 'max:10'],
-            'contenu' => ['required', 'string'],
+            // Ensure each non-empty line starts with [HH:MM:SS]
+            'contenu' => [
+                'required',
+                'string',
+                function ($attribute, $value, $fail) {
+                    $lines = preg_split("/(\r\n|\n|\r)/", (string) $value);
+                    foreach ($lines as $index => $line) {
+                        if (trim($line) === '') {
+                            continue;
+                        }
+                        if (! preg_match('/^\s*\[[0-9]{2}:[0-9]{2}:[0-9]{2}\]\s+.+$/', $line)) {
+                            $fail('Chaque ligne doit commencer par un timecode au format [HH:MM:SS]. Erreur à la ligne '.($index + 1).'.');
+
+                            return;
+                        }
+                    }
+                },
+            ],
         ];
     }
 

@@ -1,4 +1,4 @@
-import 'bootstrap';
+import "bootstrap";
 
 /**
  * We'll load the axios HTTP library which allows us to easily issue requests
@@ -6,10 +6,19 @@ import 'bootstrap';
  * CSRF token as a header based on the value of the "XSRF" token cookie.
  */
 
-import axios from 'axios';
+import axios from "axios";
 window.axios = axios;
 
-window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+window.axios.defaults.headers.common["X-Requested-With"] = "XMLHttpRequest";
+// Always send cookies (session) on same-origin and cross-origin (if CORS allows)
+window.axios.defaults.withCredentials = true;
+
+// Attach CSRF token from meta tag for POST/PUT/PATCH/DELETE
+const csrf = document.querySelector('meta[name="csrf-token"]');
+if (csrf && csrf.getAttribute("content")) {
+    window.axios.defaults.headers.common["X-CSRF-TOKEN"] =
+        csrf.getAttribute("content");
+}
 
 /**
  * Echo exposes an expressive API for subscribing to channels and listening

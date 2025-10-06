@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\ListVideosRequest;
 use App\Models\User;
 use App\Models\Video;
+use App\Models\KeyToken;
+use App\Models\LLM;
+use App\Models\Prompte;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Requests\ListVideosRequest;
 
 class VideoController extends Controller
 {
@@ -68,9 +71,56 @@ class VideoController extends Controller
         if (!in_array($video->entite_id, $entiteIds, true)) {
             abort(403, 'Action non autorisée.');
         }
+        // Génère un nouveau token si aucun n'existe ou si le token actuel expire dans moins de 1 heure
+        $token = $user->currentAccessToken();
+        if ($token && $token->expires_at && $token->expires_at->diffInMinutes(now()) > 60) {
+            $authToken = $token->plain_text_token;
+        } else {
+            $authToken = $user->createToken('default', [], now()->addDay())->plainTextToken;
+        }
+        $promptesSection = Prompte::where('type', 'section')
+            ->where(function ($query) use ($user): void {
+                $query->whereIn('entite_id', $user->entites()->pluck('entites.id'))
+                    ->orWhereNull('entite_id');
+            })
+            ->get();
+        $promptesResume = Prompte::where('type', 'resume')
+            ->where(function ($query) use ($user): void {
+                $query->whereIn('entite_id', $user->entites()->pluck('entites.id'))
+                    ->orWhereNull('entite_id');
+            })
+            ->get();
+
+        // LLM configurés pour les entités de l'utilisateur (on ne renvoie pas les clés !)
+        $entiteIds = $user->entites()->pluck('entites.id')->all();
+        $tokens = KeyToken::query()
+            ->with('llm')
+            ->whereIn('entite_id', $entiteIds)
+            ->whereNotNull('value')
+            ->get();
+        $llmsConfigured = $tokens
+            ->filter(fn ($t) => $t->llm instanceof LLM)
+            ->groupBy('llm_id')
+            ->map(function ($group) {
+                /** @var \App\Models\KeyToken $first */
+                $first = $group->first();
+                return [
+                    'llm_id' => $first->llm_id,
+                    'name' => $first->llm?->nom,
+                    'model_version' => $first->llm?->model_version,
+                    'token_count' => $group->count(),
+                ];
+            })
+            ->values()
+            ->all();
+
 
         return view('videos.traiter', [
             'video' => $video,
+            'authToken' => $authToken,
+            'promptesSection' => $promptesSection,
+            'promptesResume' => $promptesResume,
+            'llmsConfigured' => $llmsConfigured,
         ]);
     }
 }

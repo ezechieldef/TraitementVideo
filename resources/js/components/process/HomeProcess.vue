@@ -102,7 +102,7 @@ function goTo(idx) {
 function badgeClasses(idx) {
     const base = 'size-8 rounded-lg flex items-center justify-center text-sm font-semibold border'
     if (idx === currentIndex.value) {
-        return `${base} bg-slate-600 text-white border-transparent`
+        return `${base} bg-[#DE8956] text-white border-transparent`
     }
     if (isDisabled(idx)) {
         return `${base} bg-white text-slate-800 border-slate-200`

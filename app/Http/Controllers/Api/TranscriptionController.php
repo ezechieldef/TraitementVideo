@@ -2,66 +2,47 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\User;
-use App\Models\Video;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreTranscriptionRequest;
 use App\Models\MembreEntite;
 use App\Models\Transcription;
+use App\Models\User;
+use App\Models\Video;
+use App\Services\YoutubeTranscriptPlugin;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Log;
-use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
-use App\Services\YouTubeTranscriptService;
-use App\Http\Requests\StoreTranscriptionRequest;
+use Illuminate\Support\Facades\Log;
 
 class TranscriptionController extends Controller
 {
-    public function __construct(private YouTubeTranscriptService $yt)
-    {
-    }
+    public function __construct(public YoutubeTranscriptPlugin $plugin) {}
 
     /**
      * GET /api/videos/{video}/transcription/youtube
-     * Fetch transcript from YouTube and persist as latest transcription for the video.
+     * Refresh available tracks from YouTube and persist any missing transcriptions in DB.
      */
     public function fetchFromYouTube(Video $video): JsonResponse
     {
         $this->authorizeVideoAccess($video);
 
-        $langPref = ['fr', 'en'];
         try {
-            $result = $this->yt->fetch($video->youtube_id, $langPref);
+            $tracks = $this->plugin->fetchAvailableTracks($video->youtube_id);
+
+            return response()->json([
+                'success' => true,
+                'tracks' => $tracks,
+            ]);
         } catch (\Throwable $e) {
+            Log::error('YouTube transcript refresh failed', [
+                'video_id' => $video->id,
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
-            ], 422);
+                'message' => 'Échec de la récupération depuis YouTube.',
+            ], 500);
         }
-
-        $lines = $result['lines'];
-        // Compose textarea-like content: one line per caption, prefixed by seconds integer
-        $content = collect($lines)
-            ->map(function (array $l): string {
-                $sec = (int) round($l['start']);
-
-                return $sec . ' ' . $l['text'];
-            })
-            ->implode("\n");
-
-        // Store as a new transcription row (keep history)
-        $t = Transcription::create([
-            'video_id' => $video->id,
-            'langue' => $result['lang'],
-            'contenu' => $content,
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'transcription' => [
-                'id' => $t->id,
-                'langue' => $t->langue,
-                'contenu' => $t->contenu,
-            ],
-        ]);
     }
 
     /**
@@ -74,11 +55,22 @@ class TranscriptionController extends Controller
 
         $data = $request->validated();
 
-        $t = Transcription::create([
-            'video_id' => $video->id,
-            'langue' => $data['langue'],
-            'contenu' => $data['contenu'],
-        ]);
+        $t = Transcription::query()
+            ->where('video_id', $video->id)
+            ->where('langue', $data['langue'])
+            ->latest('id')
+            ->first();
+
+        if ($t) {
+            $t->contenu = $data['contenu'];
+            $t->save();
+        } else {
+            $t = Transcription::create([
+                'video_id' => $video->id,
+                'langue' => $data['langue'],
+                'contenu' => $data['contenu'],
+            ]);
+        }
 
         return response()->json([
             'success' => true,
@@ -114,16 +106,62 @@ class TranscriptionController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/videos/{video}/transcription/languages
+     * List distinct languages already stored in DB for this video.
+     */
+    public function listLanguages(Video $video): JsonResponse
+    {
+        $this->authorizeVideoAccess($video);
+
+        $langs = Transcription::query()
+            ->where('video_id', $video->id)
+            ->distinct()
+            ->pluck('langue')
+            ->values()
+            ->all();
+
+        return response()->json([
+            'success' => true,
+            'languages' => $langs,
+        ]);
+    }
+
+    /**
+     * GET /api/videos/{video}/transcription/{langue}
+     * Return latest transcription for the given language if any.
+     */
+    public function showByLanguage(Video $video, string $langue): JsonResponse
+    {
+        $this->authorizeVideoAccess($video);
+
+        $t = Transcription::query()
+            ->where('video_id', $video->id)
+            ->where('langue', $langue)
+            ->latest('id')
+            ->first();
+
+        return response()->json([
+            'success' => true,
+            'transcription' => $t ? [
+                'id' => $t->id,
+                'langue' => $t->langue,
+                'contenu' => $t->contenu,
+                'created_at' => $t->created_at?->toISOString(),
+            ] : null,
+        ]);
+    }
+
     private function authorizeVideoAccess(Video $video): void
     {
         /** @var User|null $user */
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             abort(401);
         }
 
         $entiteIds = $user->entites()->pluck('entites.id')->all();
-        if (!in_array($video->entite_id, $entiteIds, true)) {
+        if (! in_array($video->entite_id, $entiteIds, true)) {
             abort(403, 'Action non autorisée.');
         }
 
@@ -132,8 +170,20 @@ class TranscriptionController extends Controller
             ->where('entite_id', $video->entite_id)
             ->where('user_id', $user->id)
             ->first();
-        if (!$membership) {
+        if (! $membership) {
             abort(403);
         }
+    }
+
+    public function getAvailableTracks(Video $video): JsonResponse
+    {
+        $this->authorizeVideoAccess($video);
+
+        $tracks = $this->plugin->fetchAvailableTracks($video->youtube_id);
+
+        return response()->json([
+            'success' => true,
+            'tracks' => $tracks,
+        ]);
     }
 }

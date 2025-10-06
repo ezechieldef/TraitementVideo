@@ -23,6 +23,7 @@ class Video extends Model
         'langue',
         'step',
         'type_contenu',
+        'section_instruction',
     ];
 
     /**

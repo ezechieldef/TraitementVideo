@@ -6,6 +6,7 @@
 
 import "./bootstrap";
 import { createApp } from "vue";
+import { ZiggyVue } from "ziggy-js";
 import Swal from "sweetalert2";
 
 /**
@@ -16,9 +17,15 @@ import Swal from "sweetalert2";
 
 window.Swal = Swal;
 
+// Initialize Sanctum CSRF cookie once
+if (window.axios) {
+    window.axios.get("/sanctum/csrf-cookie").catch(() => {});
+}
+
 const el = document.getElementById("app");
 if (el) {
     const app = createApp({});
+    app.use(ZiggyVue);
     import("./components/ExampleComponent.vue").then(
         ({ default: ExampleComponent }) => {
             app.component("example-component", ExampleComponent);
