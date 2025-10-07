@@ -18,6 +18,7 @@ class UpdateSectionRequest extends FormRequest
     {
         return [
             'titre' => ['nullable', 'string', 'max:255'],
+            'langue' => ['nullable', 'string', 'max:10'],
             'debut' => ['required', 'integer', 'min:0'],
             'fin' => ['required', 'integer', 'gt:debut'],
             'ordre' => ['nullable', 'integer', 'min:0'],

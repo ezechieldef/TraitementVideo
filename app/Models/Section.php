@@ -14,6 +14,7 @@ class Section extends Model
     protected $fillable = [
         'video_id',
         'ordre',
+        'langue',
         'titre',
         'debut',
         'fin',

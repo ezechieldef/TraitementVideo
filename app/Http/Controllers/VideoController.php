@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
-use App\Models\Video;
+use App\Http\Requests\ListVideosRequest;
 use App\Models\KeyToken;
 use App\Models\LLM;
 use App\Models\Prompte;
+use App\Models\User;
+use App\Models\Video;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
-use App\Http\Requests\ListVideosRequest;
 
 class VideoController extends Controller
 {
@@ -22,7 +22,7 @@ class VideoController extends Controller
         $entiteIds = $user instanceof User ? $user->entites()->pluck('entites.id')->all() : [];
 
         $status = strtoupper($data['status'] ?? 'NEW');
-        if (!in_array($status, ['NEW', 'PROCESSING', 'DONE'], true)) {
+        if (! in_array($status, ['NEW', 'PROCESSING', 'DONE'], true)) {
             $status = 'NEW';
         }
 
@@ -35,9 +35,9 @@ class VideoController extends Controller
         $q = $data['q'] ?? null;
         if ($q) {
             $query->where(function ($sub) use ($q): void {
-                $sub->where('titre', 'like', '%' . $q . '%')
-                    ->orWhere('url', 'like', '%' . $q . '%')
-                    ->orWhere('youtube_id', 'like', '%' . $q . '%');
+                $sub->where('titre', 'like', '%'.$q.'%')
+                    ->orWhere('url', 'like', '%'.$q.'%')
+                    ->orWhere('youtube_id', 'like', '%'.$q.'%');
             });
         }
 
@@ -68,7 +68,7 @@ class VideoController extends Controller
         /** @var User|null $user */
         $user = Auth::user();
         $entiteIds = $user instanceof User ? $user->entites()->pluck('entites.id')->all() : [];
-        if (!in_array($video->entite_id, $entiteIds, true)) {
+        if (! in_array($video->entite_id, $entiteIds, true)) {
             abort(403, 'Action non autorisée.');
         }
         // Génère un nouveau token si aucun n'existe ou si le token actuel expire dans moins de 1 heure
@@ -94,16 +94,17 @@ class VideoController extends Controller
         // LLM configurés pour les entités de l'utilisateur (on ne renvoie pas les clés !)
         $entiteIds = $user->entites()->pluck('entites.id')->all();
         $tokens = KeyToken::query()
-            ->with('llm')
+            ->with(['llm', 'entite'])
             ->whereIn('entite_id', $entiteIds)
             ->whereNotNull('value')
             ->get();
         $llmsConfigured = $tokens
-            ->filter(fn($t) => $t->llm instanceof LLM)
+            ->filter(fn ($t) => $t->llm instanceof LLM)
             ->groupBy('llm_id')
             ->map(function ($group) {
                 /** @var \App\Models\KeyToken $first */
                 $first = $group->first();
+
                 return [
                     'llm_id' => $first->llm_id,
                     'name' => $first->llm?->nom,
@@ -114,6 +115,25 @@ class VideoController extends Controller
             ->values()
             ->all();
 
+        // Tokens configurés (sélection fine de la clé à utiliser)
+        $tokensConfigured = $tokens
+            ->filter(fn ($t) => $t->llm instanceof LLM)
+            ->map(function ($t) {
+                /** @var \App\Models\KeyToken $t */
+                return [
+                    'id' => $t->id,
+                    'type' => $t->type,
+                    'llm_id' => $t->llm_id,
+                    'llm_name' => $t->llm?->nom,
+                    'model_version' => $t->llm?->model_version,
+                    'entite_id' => $t->entite_id,
+                    'entite_titre' => $t->entite?->titre,
+                    'status' => $t->status,
+                    'priority' => $t->priority,
+                ];
+            })
+            ->values()
+            ->all();
 
         return view('videos.traiter', [
             'video' => $video,
@@ -121,6 +141,7 @@ class VideoController extends Controller
             'promptesSection' => $promptesSection,
             'promptesResume' => $promptesResume,
             'llmsConfigured' => $llmsConfigured,
+            'tokensConfigured' => $tokensConfigured,
         ]);
     }
 }

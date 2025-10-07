@@ -9,6 +9,7 @@
         localStorage.setItem('promptes_section', JSON.stringify(@json($promptesSection)));
         localStorage.setItem('promptes_resume', JSON.stringify(@json($promptesResume)));
         localStorage.setItem('llms_configured', JSON.stringify(@json($llmsConfigured ?? [])));
+        localStorage.setItem('api_tokens_configured', JSON.stringify(@json($tokensConfigured ?? [])));
     </script>
 @endpush
 

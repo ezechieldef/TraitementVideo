@@ -5,17 +5,18 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSectionRequest;
 use App\Http\Requests\UpdateSectionRequest;
+use App\Models\KeyToken;
 use App\Models\MembreEntite;
 use App\Models\Section;
 use App\Models\Transcription;
 use App\Models\User;
 use App\Models\Video;
+use App\Services\LlmGateway;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use App\Models\KeyToken;
-use App\Services\LlmGateway;
+use Illuminate\Support\Facades\Validator;
 
 class SectionController extends Controller
 {
@@ -23,12 +24,12 @@ class SectionController extends Controller
     {
         /** @var User|null $user */
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             abort(401);
         }
 
         $entiteIds = $user->entites()->pluck('entites.id')->all();
-        if (!in_array($video->entite_id, $entiteIds, true)) {
+        if (! in_array($video->entite_id, $entiteIds, true)) {
             abort(403, 'Action non autorisée.');
         }
 
@@ -36,7 +37,7 @@ class SectionController extends Controller
             ->where('entite_id', $video->entite_id)
             ->where('user_id', $user->id)
             ->first();
-        if (!$membership) {
+        if (! $membership) {
             abort(403);
         }
     }
@@ -53,9 +54,10 @@ class SectionController extends Controller
 
         return response()->json([
             'success' => true,
-            'sections' => $sections->map(fn(Section $s) => [
+            'sections' => $sections->map(fn (Section $s) => [
                 'id' => $s->id,
                 'titre' => $s->titre,
+                'langue' => $s->langue,
                 'debut' => $s->debut,
                 'fin' => $s->fin,
                 'longueur' => $s->longueur,
@@ -76,6 +78,7 @@ class SectionController extends Controller
         $s = new Section;
         $s->video_id = $video->id;
         $s->titre = $data['titre'] ?? null;
+        $s->langue = $data['langue'] ?? null;
         $s->debut = (int) $data['debut'];
         $s->fin = (int) $data['fin'];
         $s->longueur = max(0, $s->fin - $s->debut);
@@ -91,6 +94,7 @@ class SectionController extends Controller
             'section' => [
                 'id' => $s->id,
                 'titre' => $s->titre,
+                'langue' => $s->langue,
                 'debut' => $s->debut,
                 'fin' => $s->fin,
                 'longueur' => $s->longueur,
@@ -111,6 +115,9 @@ class SectionController extends Controller
 
         $data = $request->validated();
         $section->titre = $data['titre'] ?? $section->titre;
+        if (array_key_exists('langue', $data)) {
+            $section->langue = $data['langue'];
+        }
         $section->debut = (int) $data['debut'];
         $section->fin = (int) $data['fin'];
         $section->longueur = max(0, $section->fin - $section->debut);
@@ -128,6 +135,7 @@ class SectionController extends Controller
             'section' => [
                 'id' => $section->id,
                 'titre' => $section->titre,
+                'langue' => $section->langue,
                 'debut' => $section->debut,
                 'fin' => $section->fin,
                 'longueur' => $section->longueur,
@@ -157,66 +165,89 @@ class SectionController extends Controller
     public function auto(Video $video): JsonResponse
     {
         $this->authorizeVideoAccess($video);
+        $v = Validator::make(request()->all(), [
+            'custom_instruction' => ['required', 'string', 'max:2000'],
+            // 'prompt' => ['sometimes', 'string', 'max:2000'],
 
+            'token_id' => ['required', 'integer', 'exists:key_tokens,id'],
+            'langue' => ['required', 'string', 'max:10'],
+        ]);
+        if ($v->fails()) {
+            return response()->json(['success' => false, 'errors' => $v->errors()], 422);
+        }
         // Inputs (LLM not executed here yet, but we persist the user's custom instruction)
         $customInstruction = (string) request()->string('custom_instruction', '');
-        $promptForLlm = (string) request()->string('prompt', '');
-        $llmId = request()->input('llm_id');
-        if ($llmId === null) {
-            return response()->json(['success' => false, 'message' => 'Aucun LLM sélectionné.'], 422);
+
+        $tokenId = request()->input('token_id');
+        $selectedLangue = (string) request()->input('langue', '');
+        if ($tokenId === null) {
+            return response()->json(['success' => false, 'message' => 'Aucun jeton sélectionné.'], 422);
         }
 
         // Récupérer un token valide pour cet LLM parmi les entités de l'utilisateur courant
         /** @var User $user */
         $user = Auth::user();
         $entiteIds = $user->entites()->pluck('entites.id')->all();
-        $token = KeyToken::query()
-            ->with('llm')
-            ->whereIn('entite_id', $entiteIds)
-            ->where('llm_id', (int) $llmId)
-            ->whereNotNull('value')
-            ->orderByDesc('priority')
-            ->first();
-        if (!$token || !$token->llm) {
-            return response()->json(['success' => false, 'message' => 'Aucun jeton valide pour cet LLM.'], 422);
-        }
+        if ($tokenId !== null) {
+            $token = KeyToken::query()
+                ->with('llm')
+                ->whereIn('entite_id', $entiteIds)
+                ->where('id', (int) $tokenId)
+                ->whereNotNull('value')
+                ->first();
+            if (! $token || ! $token->llm) {
+                return response()->json(['success' => false, 'message' => 'Jeton API invalide ou non autorisé.'], 422);
+            }
+        } else {
+            $token = KeyToken::query()
+                ->with('llm')
+                ->whereIn('entite_id', $entiteIds)
 
-        // Persist custom instruction on the video first (as requested)
-        if ($customInstruction !== '') {
-            $video->section_instruction = $customInstruction;
-            $video->save();
+                ->whereNotNull('value')
+                ->orderByDesc('priority')
+                ->first();
+            if (! $token || ! $token->llm) {
+                return response()->json(['success' => false, 'message' => 'Aucun jeton valide pour cet LLM.'], 422);
+            }
         }
 
         // Construire messages pour le modèle (system + user)
-        $system = 'Tu es un service qui découpe une vidéo en sections à partir d\'une transcription. Réponds STRICTEMENT en JSON avec le schéma: {"sections":[{"titre":"string","debut":"HH:MM:SS","fin":"HH:MM:SS"}]}';
+        $system = 'Tu es un service qui découpe une vidéo en sections à partir d\'une transcription. Réponds STRICTEMENT en JSON avec le schéma: {"sections":[{"titre":"string","debut":"HH:MM:SS","fin":"HH:MM:SS", "langue":"string(len:2)"}]}';
+        $system .= "\nRègles:\n"
+            ."- Assure-toi que 0 <= debut < fin.\n"
+            ."- debut/fin doivent correspondre à des timestamps existants dans la transcription.\n"
+            ."- Ne pas dupliquer/chevaucher fortement les sections.\n"
+            ."- Si le texte est court, peux renvoyer 1-2 sections pertinentes.\n"
+            .'Langue de sortie : '.($selectedLangue ?: 'français');
+
         $messages = [
             ['role' => 'system', 'content' => $system],
-            ['role' => 'user', 'content' => $promptForLlm ?: $customInstruction],
+            ['role' => 'user', 'content' => $customInstruction],
         ];
 
         // Charger la dernière transcription (langue de la vidéo en priorité)
-        $tQuery = Transcription::query()->where('video_id', $video->id);
-        if ($video->langue) {
-            $base = explode('-', (string) $video->langue)[0];
-            $tQuery->where('langue', $base);
-        }
-        $t = $tQuery->latest('id')->first() ?? Transcription::query()->where('video_id', $video->id)->latest('id')->first();
-        if (!$t) {
+        $transcription = Transcription::query()->where('video_id', $video->id)
+            ->where('langue', $selectedLangue)->latest('id')->first()
+            ?? Transcription::query()->where('video_id', $video->id)->latest('id')->first();
+        if (! $transcription) {
             return response()->json(['success' => false, 'message' => 'Aucune transcription disponible pour cette vidéo.'], 422);
         }
-        $messages[] = ['role' => 'user', 'content' => "Transcription:\n" . $t->contenu];
+
+        $messages[] = ['role' => 'user', 'content' => "Transcription:\n".$transcription->contenu];
 
         // Appel LLM
-        $gateway = new LlmGateway();
+        $gateway = new LlmGateway;
         try {
             $content = $gateway->chatComplete([
-                'type' => strtoupper($token->type ?? 'OPENAI'),
+                'tokenInfo' => (string) $token,
+                'type' => strtoupper($token->llm->getType()),
                 'apiKey' => (string) $token->value,
-                'model' => (string) ($token->llm->model_version ?? ''),
+                'model' => (string) ($token->llm->nomModel() ?? ''),
             ], $messages);
         } catch (\Throwable $e) {
             Log::error('LLM chatComplete failed', ['error' => $e->getMessage()]);
-            return response()->json(['success' => false, 'message' => 'Échec de l\'appel LLM.'], 500);
+
+            return response()->json(['success' => false, 'message' => 'Échec de l\'appel LLM. '.$e->getMessage()], 500);
         }
 
         // Parser le JSON pour créer les sections exactes
@@ -244,6 +275,7 @@ class SectionController extends Controller
             $s = Section::create([
                 'video_id' => $video->id,
                 'titre' => $titre ?: null,
+                'langue' => $selectedLangue ?: ($video->langue ? explode('-', (string) $video->langue)[0] : null),
                 'debut' => $debut,
                 'fin' => $fin,
                 'longueur' => max(0, $fin - $debut),
@@ -273,12 +305,15 @@ class SectionController extends Controller
     {
         // Pick the latest transcription for the video's base language if possible, else any latest.
         $tQuery = Transcription::query()->where('video_id', $video->id);
-        if ($video->langue) {
+        if ($section->langue) {
+            $base = explode('-', (string) $section->langue)[0];
+            $tQuery->where('langue', $base);
+        } elseif ($video->langue) {
             $base = explode('-', (string) $video->langue)[0];
             $tQuery->where('langue', $base);
         }
         $t = $tQuery->latest('id')->first() ?? Transcription::query()->where('video_id', $video->id)->latest('id')->first();
-        if (!$t) {
+        if (! $t) {
             return;
         }
 
@@ -300,7 +335,7 @@ class SectionController extends Controller
             if ($line === '') {
                 continue;
             }
-            if (!preg_match('/^\[([0-9]{2}):([0-9]{2}):([0-9]{2})\]\s*(.+)$/', $line, $m)) {
+            if (! preg_match('/^\[([0-9]{2}):([0-9]{2}):([0-9]{2})\]\s*(.+)$/', $line, $m)) {
                 continue;
             }
             $sec = ((int) $m[1]) * 3600 + ((int) $m[2]) * 60 + ((int) $m[3]);
@@ -318,6 +353,25 @@ class SectionController extends Controller
         $h = (int) ($parts[0] ?? 0);
         $m = (int) ($parts[1] ?? 0);
         $s = (int) ($parts[2] ?? 0);
+
         return max(0, $h * 3600 + $m * 60 + $s);
+    }
+
+    private function truncateUtf8ByBytes(string $text, int $maxBytes): string
+    {
+        // Ajoute un marqueur pour indiquer que c'est tronqué sans dépasser la limite
+        $suffix = "\n[...TRONQUÉ POUR LIMITE DE TAILLE...]";
+        if (strlen($text) <= $maxBytes) {
+            return $text;
+        }
+        $limit = max(0, $maxBytes - strlen($suffix));
+        // mb_strcut découpe par octets en respectant les frontières d'UTF-8
+        if (function_exists('mb_strcut')) {
+            $cut = mb_strcut($text, 0, $limit, 'UTF-8');
+        } else {
+            $cut = substr($text, 0, $limit);
+        }
+
+        return $cut.$suffix;
     }
 }
