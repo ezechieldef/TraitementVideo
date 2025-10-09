@@ -19,6 +19,8 @@ class Resume extends Model
         'langue',
         'isApproved',
         'isExported',
+        'is_processing',
+        'error_message',
         'model_used',
         'audio_url',
     ];
@@ -31,6 +33,7 @@ class Resume extends Model
         return [
             'isApproved' => 'boolean',
             'isExported' => 'boolean',
+            'is_processing' => 'boolean',
         ];
     }
 

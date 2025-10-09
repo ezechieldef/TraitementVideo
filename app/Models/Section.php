@@ -22,6 +22,8 @@ class Section extends Model
         'transcription',
         'custom_instruction',
         'isFromCron',
+        'is_processing',
+        'error_message',
     ];
 
     /**
@@ -35,6 +37,7 @@ class Section extends Model
             'fin' => 'integer',
             'longueur' => 'integer',
             'isFromCron' => 'boolean',
+            'is_processing' => 'boolean',
         ];
     }
 

@@ -32,11 +32,13 @@
             </button>
 
             <!-- Import Button (hidden on small screens) placed at far right) -->
-            <a href="{{ route('videos.import') }}"
-                class="hidden lg:inline-flex items-center gap-2 rounded-lg bg-red-600 hover:bg-red-700 text-white px-3 py-1.5">
-                <i class="ti ti-download"></i>
-                Importer vidéo
-            </a>
+            @if (!in_array(Route::currentRouteName(), ['videos.import', 'videos.create', 'videos.traiter']))
+                <a href="{{ route('videos.import') }}"
+                    class="hidden lg:inline-flex items-center gap-2 rounded-lg bg-red-600 hover:bg-red-700 text-white px-3 py-1.5">
+                    <i class="ti ti-download"></i>
+                    Importer vidéo
+                </a>
+            @endif
         </div>
     </header>
 

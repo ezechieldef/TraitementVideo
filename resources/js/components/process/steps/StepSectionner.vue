@@ -24,7 +24,7 @@
                     </div>
                     <button class="px-3 py-1 rounded-md bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50"
                         :disabled="busy || !video?.id" @click="autoSplit">Découper automatiquement</button>
-                    <button class="px-3 py-1 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                    <button class="px-3 py-1 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
                         :disabled="busy || !video?.id" @click="openModal(null)">Ajouter une section</button>
                 </div>
             </div>
@@ -36,7 +36,17 @@
             <div class="rounded-xl border border-gray-500/20 overflow-hidden theme-surface relative ">
                 <div class="px-3 py-2 theme-surface font-semibold flex  justify-between gap-3">
                     <span>Sections</span>
-                    <div class="flex items-center justify-end flex-wrap gap-3" v-if="selectedIds.length > 0">
+                    <div v-if="generatingAuto"
+                        class="flex items-center gap-2 text-xs font-normal text-indigo-600 me-auto ms-4">
+                        <span
+                            class="inline-block w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></span>
+                        <span>Découpage automatique en cours…</span>
+                        <button
+                            class="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded border border-indigo-300 hover:bg-indigo-50"
+                            @click="cancelAutoGeneration">Annuler</button>
+                    </div>
+                    <div class="flex items-center justify-end flex-wrap gap-3"
+                        v-if="!generatingAuto && selectedIds.length > 0">
                         <label class="flex items-center text-nowrap gap-2 text-sm">
                             <input type="checkbox" :checked="allSelected" @change="toggleSelectAll($event)" />
                             <span>Tout sélectionner</span>
@@ -232,11 +242,10 @@
                             </select>
                         </div>
                         <div>
-                            <label class="text-xs theme-muted-text block mb-1">Langue de travail</label>
-                            <select v-model="autoLangue"
-                                class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-                                <option v-for="l in availableLangues" :key="l" :value="l">{{ l }}</option>
-                                <option :value="''">(auto)</option>
+                            <label class="text-xs theme-muted-text block mb-1">Langue de travail (lecture seule)</label>
+                            <select v-model="autoLangue" disabled
+                                class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-gray-50 text-gray-600">
+                                <option :value="autoLangue">{{ autoLangue || '—' }}</option>
                             </select>
                         </div>
                     </div>
@@ -266,6 +275,7 @@ import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 
 const props = defineProps({ video: { type: Object, default: null } })
+const emit = defineEmits(['canProceed', 'refreshStep'])
 const route = inject('route')
 
 const sections = ref([])
@@ -293,6 +303,12 @@ const selectedTokenId = ref(null)
 const autoPrompt = ref('')
 const autoError = ref('')
 const autoSubmitting = ref(false)
+const generatingAuto = ref(false)
+const autoPollTimer = ref(null)
+const autoPollAttempts = ref(0)
+const baseSectionCount = ref(0)
+const AUTO_POLL_INTERVAL_MS = 3500
+const MAX_AUTO_POLL_ATTEMPTS = 25
 const availableLangues = ref([])
 const autoLangue = ref('')
 const selectedLang = ref('')
@@ -341,8 +357,20 @@ async function loadSections() {
     if (!props.video?.id) return
     try {
         const url = route('api.videos.sections.index', { video: props.video.id })
-        const { data } = await window.axios.get(url, { headers: headers.value })
+        const params = {}
+        if (selectedLang.value) { params.langue = selectedLang.value }
+        const { data } = await window.axios.get(url, { headers: headers.value, params })
         sections.value = data?.sections || []
+        // Inform parent if we can proceed (at least one section). If none and we filtered by language,
+        // perform a quick fallback check without language to see if any section exists globally.
+        let can = (sections.value.length > 0)
+        if (!can && selectedLang.value) {
+            try {
+                const { data: dataAll } = await window.axios.get(url, { headers: headers.value })
+                can = (dataAll?.sections || []).length > 0
+            } catch { /* ignore */ }
+        }
+        emit('canProceed', can)
         // Prune selection to existing ids
         const existing = new Set((sections.value || []).map(s => s.id))
         selectedIds.value = selectedIds.value.filter(id => existing.has(id))
@@ -420,6 +448,8 @@ async function submitSection() {
         showModal.value = false
         formError.value = ''
         await loadSections()
+        // A new or updated section could change progression (especially a first section)
+        emit('refreshStep')
     } catch (e) {
         formError.value = e?.response?.data?.message || 'Échec de l\'enregistrement.'
     } finally {
@@ -446,6 +476,7 @@ async function removeSection(s) {
         const url = route ? route('api.videos.sections.destroy', { video: props.video.id, section: s.id }) : `/api/videos/${props.video.id}/sections/${s.id}`
         await window.axios.delete(url, { headers: headers.value })
         await loadSections()
+        emit('refreshStep')
         await Swal.fire({ icon: 'success', title: 'Section supprimée', timer: 1200, showConfirmButton: false })
     } catch (e) {
         await Swal.fire({ icon: 'error', title: 'Échec de la suppression', text: e?.response?.data?.message || e?.message || 'Erreur inconnue' })
@@ -489,6 +520,7 @@ async function bulkDelete() {
         const okCount = flat.filter(x => x?.ok).length
         const failCount = flat.length - okCount
         await loadSections()
+        emit('refreshStep')
         selectedIds.value = []
         if (failCount === 0) {
             await Swal.fire({ icon: 'success', title: `${okCount} supprimée${okCount > 1 ? 's' : ''}`, timer: 1400, showConfirmButton: false })
@@ -521,8 +553,8 @@ async function autoSplit() {
     selectedTokenId.value = apiTokens.value?.[0]?.id ?? null
     autoPrompt.value = promptesSection.value?.[0]?.contenu ?? ''
     autoError.value = ''
-    // prefer current selected language
-    if (!autoLangue.value) autoLangue.value = selectedLang.value || availableLangues.value[0] || ''
+    // verrouiller sur la langue de travail
+    autoLangue.value = selectedLang.value || availableLangues.value[0] || ''
     showAutoModal.value = true
 }
 
@@ -540,17 +572,30 @@ async function submitAuto() {
     const finalPrompt = basePrompt + systemInstruction
 
     autoSubmitting.value = true
+    // baseline count before triggering async
+    baseSectionCount.value = sections.value.length
     try {
         const url = route ? route('api.videos.sections.auto', { video: props.video.id }) : `/api/videos/${props.video.id}/sections/auto`
         // Send model info and custom_instruction to be stored; finalPrompt is used for the LLM call trigger server-side later
-        await window.axios.post(url, {
+        const { data, status } = await window.axios.post(url, {
             token_id: selectedTokenId.value,
             custom_instruction: basePrompt, // persisted
             prompt: finalPrompt, // for LLM processing pipeline (not persisted)
-            langue: autoLangue.value || null,
+            langue: selectedLang.value || autoLangue.value || null,
+            async: true,
         }, { headers: headers.value })
         showAutoModal.value = false
-        await loadSections()
+        if (status === 202 && data?.queued) {
+            // Async path
+            generatingAuto.value = true
+            autoPollAttempts.value = 0
+            scheduleAutoPolling(true)
+        } else {
+            // Legacy sync path (sections already created)
+            await loadSections()
+            emit('refreshStep')
+            await Swal.fire({ icon: 'success', title: 'Découpage terminé', timer: 1400, showConfirmButton: false })
+        }
     } catch (e) {
         autoError.value = e?.response?.data?.message || 'Échec du découpage automatique.'
     } finally {
@@ -570,7 +615,8 @@ watch(selectedPrompteId, (val, old) => {
 
 // Reload transcript when language changes
 watch(selectedLang, async () => {
-    await loadTranscript()
+    autoLangue.value = selectedLang.value || autoLangue.value
+    await Promise.all([loadTranscript(), loadSections()])
     // Keep defaults in modals aligned
     if (form.value && !editing.value) form.value.langue = selectedLang.value
 })
@@ -594,4 +640,39 @@ function sliceTranscript(text, startSec, endSec) {
     }
     return out.join('\n')
 }
+
+function scheduleAutoPolling(force = false) {
+    if (autoPollTimer.value) {
+        clearTimeout(autoPollTimer.value)
+        autoPollTimer.value = null
+    }
+    if (!generatingAuto.value && !force) { return }
+    autoPollTimer.value = setTimeout(async () => {
+        autoPollAttempts.value += 1
+        await loadSections()
+        // Success condition: new sections appeared
+        if (sections.value.length > baseSectionCount.value) {
+            generatingAuto.value = false
+            emit('refreshStep')
+            await Swal.fire({ icon: 'success', title: 'Sections générées', timer: 1500, showConfirmButton: false })
+            return
+        }
+        if (autoPollAttempts.value >= MAX_AUTO_POLL_ATTEMPTS) {
+            generatingAuto.value = false
+            await Swal.fire({ icon: 'warning', title: 'Découpage lent', text: 'Aucune nouvelle section détectée. Réessayez plus tard.' })
+            return
+        }
+        scheduleAutoPolling()
+    }, AUTO_POLL_INTERVAL_MS)
+}
+
+function cancelAutoGeneration() {
+    generatingAuto.value = false
+    if (autoPollTimer.value) { clearTimeout(autoPollTimer.value); autoPollTimer.value = null }
+}
+
+// If user leaves component while polling, clear timer
+onMounted(() => {
+    // no-op now, could restore state from localStorage if needed
+})
 </script>

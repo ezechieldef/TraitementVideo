@@ -52,7 +52,9 @@ class TranscriptionController extends Controller
     public function save(StoreTranscriptionRequest $request, Video $video): JsonResponse
     {
         $this->authorizeVideoAccess($video);
-
+        if ($video->status == 'NEW') {
+            $video->status = 'PROCESSING';
+        }
         $data = $request->validated();
 
         $t = Transcription::query()

@@ -24,12 +24,12 @@ class SectionController extends Controller
     {
         /** @var User|null $user */
         $user = Auth::user();
-        if (!$user) {
+        if (! $user) {
             abort(401);
         }
 
         $entiteIds = $user->entites()->pluck('entites.id')->all();
-        if (!in_array($video->entite_id, $entiteIds, true)) {
+        if (! in_array($video->entite_id, $entiteIds, true)) {
             abort(403, 'Action non autorisée.');
         }
 
@@ -37,7 +37,7 @@ class SectionController extends Controller
             ->where('entite_id', $video->entite_id)
             ->where('user_id', $user->id)
             ->first();
-        if (!$membership) {
+        if (! $membership) {
             abort(403);
         }
     }
@@ -63,7 +63,7 @@ class SectionController extends Controller
 
         return response()->json([
             'success' => true,
-            'sections' => $sections->map(fn(Section $s) => [
+            'sections' => $sections->map(fn (Section $s) => [
                 'id' => $s->id,
                 'titre' => $s->titre,
                 'langue' => $s->langue,
@@ -72,8 +72,6 @@ class SectionController extends Controller
                 'longueur' => $s->longueur,
                 'ordre' => $s->ordre,
                 'resumes_count' => $s->resumes_count,
-                'is_processing' => (bool) $s->is_processing,
-                'error_message' => $s->error_message,
             ]),
         ]);
     }
@@ -110,8 +108,6 @@ class SectionController extends Controller
                 'fin' => $s->fin,
                 'longueur' => $s->longueur,
                 'ordre' => $s->ordre,
-                'is_processing' => (bool) $s->is_processing,
-                'error_message' => $s->error_message,
             ],
         ], 201);
     }
@@ -153,8 +149,6 @@ class SectionController extends Controller
                 'fin' => $section->fin,
                 'longueur' => $section->longueur,
                 'ordre' => $section->ordre,
-                'is_processing' => (bool) $section->is_processing,
-                'error_message' => $section->error_message,
             ],
         ]);
     }
@@ -186,7 +180,6 @@ class SectionController extends Controller
 
             'token_id' => ['required', 'integer', 'exists:key_tokens,id'],
             'langue' => ['required', 'string', 'max:10'],
-            'async' => ['sometimes', 'boolean'],
         ]);
         if ($v->fails()) {
             return response()->json(['success' => false, 'errors' => $v->errors()], 422);
@@ -211,7 +204,7 @@ class SectionController extends Controller
                 ->where('id', (int) $tokenId)
                 ->whereNotNull('value')
                 ->first();
-            if (!$token || !$token->llm) {
+            if (! $token || ! $token->llm) {
                 return response()->json(['success' => false, 'message' => 'Jeton API invalide ou non autorisé.'], 422);
             }
         } else {
@@ -222,35 +215,19 @@ class SectionController extends Controller
                 ->whereNotNull('value')
                 ->orderByDesc('priority')
                 ->first();
-            if (!$token || !$token->llm) {
+            if (! $token || ! $token->llm) {
                 return response()->json(['success' => false, 'message' => 'Aucun jeton valide pour cet LLM.'], 422);
             }
-        }
-
-        // If async requested (default true), dispatch job and return 202 (after token is validated)
-        $async = request()->boolean('async', true);
-        if ($async) {
-            \App\Jobs\GenerateSectionsJob::dispatch(
-                videoId: $video->id,
-                tokenId: (int) $token->id,
-                baseLangue: $selectedLangue,
-                customInstruction: $customInstruction,
-            );
-
-            return response()->json([
-                'success' => true,
-                'queued' => true,
-            ], 202);
         }
 
         // Construire messages pour le modèle (system + user)
         $system = 'Tu es un service qui découpe une vidéo en sections à partir d\'une transcription. Réponds STRICTEMENT en JSON avec le schéma: {"sections":[{"titre":"string","debut":"HH:MM:SS","fin":"HH:MM:SS", "langue":"string(len:2)"}]}';
         $system .= "\nRègles:\n"
-            . "- Assure-toi que 0 <= debut < fin.\n"
-            . "- debut/fin doivent correspondre à des timestamps existants dans la transcription.\n"
-            . "- Ne pas dupliquer/chevaucher fortement les sections.\n"
-            . "- Si le texte est court, peux renvoyer 1-2 sections pertinentes.\n"
-            . 'Langue de sortie : ' . ($selectedLangue ?: 'français');
+            ."- Assure-toi que 0 <= debut < fin.\n"
+            ."- debut/fin doivent correspondre à des timestamps existants dans la transcription.\n"
+            ."- Ne pas dupliquer/chevaucher fortement les sections.\n"
+            ."- Si le texte est court, peux renvoyer 1-2 sections pertinentes.\n"
+            .'Langue de sortie : '.($selectedLangue ?: 'français');
 
         $messages = [
             ['role' => 'system', 'content' => $system],
@@ -261,11 +238,11 @@ class SectionController extends Controller
         $transcription = Transcription::query()->where('video_id', $video->id)
             ->where('langue', $selectedLangue)->latest('id')->first()
             ?? Transcription::query()->where('video_id', $video->id)->latest('id')->first();
-        if (!$transcription) {
+        if (! $transcription) {
             return response()->json(['success' => false, 'message' => 'Aucune transcription disponible pour cette vidéo.'], 422);
         }
 
-        $messages[] = ['role' => 'user', 'content' => "Transcription:\n" . $transcription->contenu];
+        $messages[] = ['role' => 'user', 'content' => "Transcription:\n".$transcription->contenu];
 
         // Appel LLM
         $gateway = new LlmGateway;
@@ -279,7 +256,7 @@ class SectionController extends Controller
         } catch (\Throwable $e) {
             Log::error('LLM chatComplete failed', ['error' => $e->getMessage()]);
 
-            return response()->json(['success' => false, 'message' => 'Échec de l\'appel LLM. ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Échec de l\'appel LLM. '.$e->getMessage()], 500);
         }
 
         // Parser le JSON pour créer les sections exactes
@@ -323,8 +300,6 @@ class SectionController extends Controller
                 'fin' => $s->fin,
                 'longueur' => $s->longueur,
                 'ordre' => $s->ordre,
-                'is_processing' => (bool) $s->is_processing,
-                'error_message' => $s->error_message,
             ];
         }
 
@@ -347,7 +322,7 @@ class SectionController extends Controller
             $tQuery->where('langue', $base);
         }
         $t = $tQuery->latest('id')->first() ?? Transcription::query()->where('video_id', $video->id)->latest('id')->first();
-        if (!$t) {
+        if (! $t) {
             return;
         }
 
@@ -369,7 +344,7 @@ class SectionController extends Controller
             if ($line === '') {
                 continue;
             }
-            if (!preg_match('/^\[([0-9]{2}):([0-9]{2}):([0-9]{2})\]\s*(.+)$/', $line, $m)) {
+            if (! preg_match('/^\[([0-9]{2}):([0-9]{2}):([0-9]{2})\]\s*(.+)$/', $line, $m)) {
                 continue;
             }
             $sec = ((int) $m[1]) * 3600 + ((int) $m[2]) * 60 + ((int) $m[3]);
@@ -406,6 +381,6 @@ class SectionController extends Controller
             $cut = substr($text, 0, $limit);
         }
 
-        return $cut . $suffix;
+        return $cut.$suffix;
     }
 }

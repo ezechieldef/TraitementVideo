@@ -30,6 +30,21 @@ class LlmGateway
             throw new \InvalidArgumentException('API key or model not provided');
         }
 
+        if ($type === 'GOOGLE' || $type === 'GEMINI') {
+            // Delegate to GeminiCall service (package-backed)
+            $caller = new \App\Services\GeminiCall;
+
+            return $caller->generate([
+                'apiKey' => $apiKey,
+                'model' => $model,
+                'messages' => $messages,
+                'generationConfig' => [
+                    'temperature' => 0,
+                    'responseMimeType' => 'application/json',
+                ],
+                'apiToken' => $params['apiToken'] ?? null,
+            ]);
+        }
         // Build and send request per provider
         if ($type === 'OPENAI' || $type === 'GROQ') {
             $endpoint = ($type === 'OPENAI')
@@ -53,22 +68,6 @@ class LlmGateway
             $data = $resp->json();
 
             return (string) ($data['choices'][0]['message']['content'] ?? '');
-        }
-
-        if ($type === 'GOOGLE' || $type === 'GEMINI') {
-            // Delegate to GeminiCall service (package-backed)
-            $caller = new \App\Services\GeminiCall;
-
-            return $caller->generate([
-                'apiKey' => $apiKey,
-                'model' => $model,
-                'messages' => $messages,
-                'generationConfig' => [
-                    'temperature' => 0,
-                    'responseMimeType' => 'application/json',
-                ],
-                'apiToken' => $params['apiToken'] ?? null,
-            ]);
         }
 
         throw new \RuntimeException('Unsupported LLM provider '.$type);

@@ -21,7 +21,8 @@
 
         <!-- Step content -->
         <div class="">
-            <component :is="currentComponent" :video="video" />
+            <component :is="currentComponent" :video="video" @canProceed="onCanProceed"
+                @refreshStep="refreshVideoStep" />
         </div>
 
         <!-- Footer navigation -->
@@ -59,10 +60,21 @@ const currentIndex = ref(0)
 const currentComponent = computed(() => steps[currentIndex.value].component)
 
 const video = ref(null)
+// Dynamic gate to allow advancing beyond video.step when step prerequisites are met
+const stepOverrides = ref({}) // e.g., { sectionner: true }
 const maxAllowedIndex = computed(() => {
     const vStep = Number(video.value?.step ?? 0)
-    // Autorise jusqu'à step + 1, borné par la dernière étape
-    return Math.min(vStep + 1, steps.length - 1)
+    // Autorise jusqu'à step + 1 ou plus si override pour l'étape courante
+    let allowed = vStep + 1
+    // Si l'étape sectionner est terminable (au moins une section), permettre d'aller à l'étape suivante
+    if (stepOverrides.value.sectionner === true) {
+        const idxSectionner = steps.findIndex(s => s.key === 'sectionner')
+        // N'autoriser le dépassement que si on est déjà sur l'étape Sectionner (évite de sauter des étapes)
+        if (idxSectionner >= 0 && currentIndex.value >= idxSectionner) {
+            allowed = Math.max(allowed, idxSectionner + 1)
+        }
+    }
+    return Math.min(allowed, steps.length - 1)
 })
 onMounted(() => {
     try {
@@ -109,5 +121,29 @@ function badgeClasses(idx) {
     }
     // Étape active possible mais non courante
     return `${base} bg-[#F9C98B] text-black border-transparent`
+}
+
+function onCanProceed(val) {
+    // Only meaningful for sectionner step; but generic handler is fine
+    stepOverrides.value.sectionner = !!val
+}
+
+async function refreshVideoStep() {
+    try {
+        if (!video.value?.id) { return }
+        // Call backend endpoint to recompute step status
+        const url = window.route ? window.route('api.videos.step', { video: video.value.id }) : `/api/videos/${video.value.id}/step`
+        const authToken = JSON.parse(localStorage.getItem('auth_token') || 'null') || ''
+        const headers = { Authorization: authToken ? `Bearer ${authToken}` : '', accept: 'application/json' }
+        const { data } = await window.axios.get(url, { headers })
+        if (data && typeof data.status !== 'undefined') {
+            // Update local video step and persist (keeps other fields intact)
+            video.value.step = data.status
+            try { localStorage.setItem('video_data', JSON.stringify(video.value)) } catch { }
+        }
+    } catch (e) {
+        // Silent fail – non-blocking
+        // console.warn('refreshVideoStep failed', e)
+    }
 }
 </script>

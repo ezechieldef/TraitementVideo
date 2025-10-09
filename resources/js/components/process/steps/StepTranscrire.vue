@@ -7,22 +7,27 @@
                 <div class="text-sm theme-muted-text">Chargement…</div>
             </div>
         </div>
+        <div class="bg-white shadow rounded-md p-2 mb-3 text-sky-600 text-sm">
+            <i class="ti ti-info-circle me-1 "></i> <strong class="me-2">ASTUCE</strong> : Procédez au découpage
+            automatique. Supprimez les sections
+            indésirables au besoin afin de conserver uniquement celles que vous souhaitez résumer.
+        </div>
         <div class="theme-surface my-2 py-2 px-4 rounded-lg mb-4">
             <div class="flex justify-between flex-wrap">
                 <div class="">
                     <h2 class="text-md font-semibold theme-title ">Transcrire</h2>
                     <p class="theme-muted-text text-sm">Récupérer et corriger la transcription</p>
                 </div>
-                <div class="flex flex-wrap gap-3">
+                <div class="flex items-center flex-wrap gap-3">
                     <a :href="video?.url || '#'" target="_blank" rel="noopener noreferrer"
-                        class="inline-flex items-center gap-2 rounded-md border-gray-500/20 border text-red-500  px-3 py-1 shadow-sm"
+                        class="inline-flex items-center gap-2 rounded-md border-gray-500/20 border text-red-500  px-3 py-1.5 shadow-sm"
                         :class="{ 'pointer-events-none opacity-60': isBusy || !video?.url }"
                         :aria-disabled="isBusy || !video?.url" :tabindex="(isBusy || !video?.url) ? -1 : 0">
                         <i class="ti ti-brand-youtube text-base"></i>
                         <span>Ouvrir sur YouTube</span>
                     </a>
 
-                    <select v-model="langue" class="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    <select v-model="langue" class="rounded-md border border-slate-300 px-2 py-2 text-sm"
                         :disabled="isBusy">
                         <option v-for="(lang, index) in availableLangues" :key="index" :value="lang"
                             class="capitalize ">{{ lang }}</option>
@@ -33,7 +38,7 @@
                         :disabled="isBusy" />
 
                     <button type="button"
-                        class="px-3 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50 text-sm"
+                        class="px-3 py-2 rounded-md bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 text-sm"
                         :disabled="isBusy || !video?.id" @click="refreshFromYouTube">
                         {{ loading ? 'Récupération…' : 'Récupérer depuis YouTube' }}
                     </button>
@@ -46,11 +51,12 @@
 
             <div>
                 <label class="block text-xs theme-muted-text mb-1">Transcription (une ligne par entrée, commencez la
-                    ligne par la seconde)</label>
+                    ligne par la seconde Ex: [00:00:00])</label>
                 <textarea v-model="contenu" rows="14"
                     class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="0 Bonjour…\n6 Et bienvenue…\n12 Aujourd'hui, nous allons…"
-                    :disabled="isBusy"></textarea>
+                    placeholder="[00:00:00] Bonjour….
+[00:00:05] Et bienvenue….
+[00:00:10] Aujourd'hui, nous allons… " :disabled="isBusy"></textarea>
                 <div class="mt-1 text-xs theme-muted-text flex items-center gap-2">
                     <span v-if="langue" class="inline-flex items-center gap-1">Langue: <span class="font-medium">{{
                         langue }}</span></span>
@@ -77,6 +83,7 @@
 import { ref, computed, watch, onMounted, inject } from 'vue'
 
 const props = defineProps({ video: { type: Object, required: true } })
+const emit = defineEmits(['refreshStep'])
 
 const route = inject('route')
 
@@ -159,6 +166,8 @@ async function refreshFromYouTube() {
                 notice.value = 'Transcriptions mises à jour depuis YouTube.'
                 await loadLanguages()
                 await loadByLanguage()
+                // New transcripts may have been created; notify parent to refresh step progression
+                emit('refreshStep')
             } else {
                 error.value = data?.message || 'Échec de la récupération.'
             }
@@ -210,6 +219,8 @@ async function saveTranscription() {
                 }
                 langue.value = selectedLang
                 customLang.value = ''
+                // Saving a transcription ensures the step can progress
+                emit('refreshStep')
             } else {
                 error.value = data?.message || 'Échec de l\'enregistrement.'
             }

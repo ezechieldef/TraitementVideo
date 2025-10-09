@@ -8,6 +8,7 @@
     },
     "dependencies": {
         "@tabler/icons-webfont": "^3.35.0",
+        "easymde": "^2.18.0",
         "sweetalert2": "^11.23.0"
     },
     "devDependencies": {

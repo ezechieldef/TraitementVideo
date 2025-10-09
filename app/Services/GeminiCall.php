@@ -20,6 +20,7 @@ class GeminiCall
 {
     public function generate(array $params): string
     {
+        set_time_limit(0);
         if (! class_exists('Gemini\\Laravel\\Facades\\Gemini')) {
             throw new \RuntimeException('Gemini Laravel package not installed or not autoloaded.');
         }
@@ -76,6 +77,9 @@ class GeminiCall
         } catch (\Throwable $e) {
             throw new \RuntimeException('Gemini generateContent failed: '.$e->getMessage(), 0, $e);
         }
+
+        // remettre la limte
+        set_time_limit(60);
 
         return $this->extractText($response);
     }
